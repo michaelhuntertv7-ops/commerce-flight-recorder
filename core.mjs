@@ -1,15 +1,17 @@
 import { createHash } from 'node:crypto';
-export const VERSION = '0.1.0';
+export const VERSION = '0.4.0';
 export function money(value) {
   if (typeof value !== 'string' || !/^\d{1,10}\.\d{2}$/.test(value)) return null;
   return BigInt(value.replace('.', ''));
 }
 export function reconcile(claim, evidence, now = Date.now()) {
-  const result = (verdict, code, reason) => ({ verdict, code, reason, fulfillment: verdict === 'CONFIRMED' ? 'PAYMENT VERIFIED — REVIEW OTHER FULFILLMENT CHECKS' : 'HOLD FULFILLMENT', scope: 'Payment captured for this order, amount and currency at observation time. Not a guarantee against future refunds, disputes or reversals.' });
+  const result = (verdict, code, reason) => ({ verdict, code, reason, fulfillment: verdict === 'CONFIRMED' ? 'PAYMENT VERIFIED — REVIEW OTHER FULFILLMENT CHECKS' : 'RECOMMEND FULFILLMENT HOLD', scope: 'Payment captured for this order, amount and currency at observation time. Not a guarantee against future refunds, disputes or reversals.' });
   if (!claim || typeof claim.text !== 'string' || !claim.text.trim() || claim.text.length > 2000 || claim.expected !== 'PAYMENT_COMPLETED' || !/^[A-Z0-9]{8,32}$/.test(claim.orderId || '') || money(claim.amount) === null || !/^[A-Z]{3}$/.test(claim.currency || ''))
     return result('INCOMPLETE', 'INVALID_CLAIM', 'A valid claim, order ID, amount, currency and explicit payment-completed assertion are required.');
   if (!evidence || evidence.source !== 'PAYPAL_SANDBOX_API' || evidence.error)
     return result('INCOMPLETE', 'API_UNAVAILABLE', 'Authoritative PayPal sandbox evidence is unavailable.');
+  if (evidence.webhookError)
+    return result('INCOMPLETE', 'WEBHOOK_EVIDENCE_INVALID', 'Stored PayPal webhook evidence failed integrity validation.');
   const age = now - Date.parse(evidence.observedAt);
   if (!Number.isFinite(age) || age < -5000 || age > 120000)
     return result('INCOMPLETE', 'STALE_EVIDENCE', 'The evidence timestamp is invalid or older than two minutes.');
@@ -46,9 +48,14 @@ export function reconcile(claim, evidence, now = Date.now()) {
     return result('DIVERGENCE', 'CAPTURE_AMOUNT_MISMATCH', 'The captured amount or currency differs from the claim.');
   if (o.status !== 'COMPLETED' || linked[0].status !== c.status)
     return result('INCOMPLETE', 'CONFLICTING_STATE', 'Order and independently retrieved capture states disagree. Recheck before fulfillment.');
+  const verifiedWebhooks = Array.isArray(evidence.verifiedWebhooks) ? evidence.verifiedWebhooks : [];
+  const relevantVerified = verifiedWebhooks.filter(e => e?.verification === 'SUCCESS' && (e.resource_id === c.id || e.order_id === o.id));
+  if (relevantVerified.some(e => /REFUND|REVERSE|DENIED/.test(e.event_type || '')))
+    return result('DIVERGENCE', 'VERIFIED_ADVERSE_WEBHOOK', 'A verified PayPal webhook reports an adverse state for this payment.');
   if (unit.payments?.refunds?.length || evidence.events?.some(e => /REFUND|REVERSE|DENIED/.test(e.event_type || '')))
     return result('INCOMPLETE', 'ADVERSE_EVENT', 'Related refund or adverse-event evidence requires review.');
-  return result('CONFIRMED', 'CAPTURE_CONFIRMED', 'PayPal independently reports one completed capture matching the claimed order, amount and currency.');
+  const corroborated = relevantVerified.some(e => e.event_type === 'PAYMENT.CAPTURE.COMPLETED');
+  return result('CONFIRMED', corroborated ? 'CAPTURE_AND_WEBHOOK_CONFIRMED' : 'CAPTURE_CONFIRMED', corroborated ? 'PayPal independently reports a completed capture and CFR holds a verified PayPal webhook receipt matching that payment.' : 'PayPal independently reports one completed capture matching the claimed order, amount and currency.');
 }
 export function seal(record, previousHash = null) {
   const payload = { ...record, previousHash };
@@ -56,5 +63,14 @@ export function seal(record, previousHash = null) {
 }
 export function verifySeal(record) {
   const { sha256, ...payload } = record;
-  return sha256 === createHash('sha256').update(JSON.stringify(payload)).digest('hex');
+  return typeof sha256 === 'string' && sha256 === createHash('sha256').update(JSON.stringify(payload)).digest('hex');
+}
+export function verifyChain(records) {
+  if (!Array.isArray(records)) return false;
+  let previousHash = null;
+  for (const record of records) {
+    if (!record || !verifySeal(record) || record.previousHash !== previousHash) return false;
+    previousHash = record.sha256;
+  }
+  return true;
 }

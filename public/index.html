@@ -1,17 +1,93 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Commerce Flight Recorder</title><link rel="stylesheet" href="/style.css"><script src="/app.js" defer></script></head>
-<body><header><a class="brand" href="/"><span class="mark">↗</span> Commerce Flight Recorder</a><span class="badge">PAYPAL SANDBOX · NO REAL FUNDS</span></header>
-<main><section class="hero"><div><p class="eyebrow">AFTER THE AGENT SAYS “DONE”</p><h1>Know what<br>actually happened.</h1><p class="intro">An agent claims the payment succeeded.<br>Check the evidence before the order ships.</p></div><aside class="thesis"><span class="pulse"></span><b>AI explains. PayPal proves.</b><p>Independent order + capture checks.<br>Deterministic verdicts. Exportable evidence.</p><small>Local prototype · Single full capture · USD demo</small></aside></section>
-<section class="workspace"><article class="panel claim"><div class="section-label">01 / AGENT CLAIM</div><h2>What did the agent report?</h2><label for="claim">Agent message</label><textarea id="claim" rows="3">Payment completed successfully. Fulfillment may proceed.</textarea><p class="hint">Verification scope: the explicit assertion below. Free-text wording is retained as evidence, not trusted as instructions.</p><label for="assertion">Assertion to verify</label><select id="assertion"><option value="PAYMENT_COMPLETED">Payment captured in full</option></select><label for="order">PayPal sandbox order ID</label><input id="order" placeholder="Create a demo order below, or enter an ID" autocomplete="off">
-<div class="row"><div><label for="amount">Expected amount</label><input id="amount" value="10.00" inputmode="decimal"></div><div><label for="currency">Currency</label><input id="currency" value="USD" maxlength="3"></div></div>
-<button class="primary" id="verify">Verify against PayPal <span>↗</span></button><p id="status" role="status">Ready to inspect authoritative sandbox evidence.</p></article>
-<article class="panel evidence"><div class="section-label">02 / INDEPENDENT EVIDENCE</div><div class="evidence-head"><h2>The flight record</h2><button id="export" disabled>Export JSON ↓</button></div>
-<div id="empty"><div class="reticle">◎</div><h3>A claim is not a receipt.</h3><p>Run verification to see the order, capture and event evidence side by side.</p></div>
-<div id="result" hidden><div id="verdictBox"><p class="eyebrow">RECONCILIATION VERDICT</p><h2 id="verdict"></h2><p id="reason"></p><strong id="fulfillment"></strong></div>
-<div class="facts"><div><label>PAYPAL ORDER</label><b id="orderState"></b></div><div><label>INDEPENDENT CAPTURE</label><b id="captureState"></b></div><div><label>EVENT EVIDENCE</label><b id="events"></b></div><div><label>WEBHOOK DELIVERY</label><b id="delivery"></b></div></div>
-<p class="scope" id="scope"></p><div class="ai"><div class="section-label">03 / PLAIN-LANGUAGE EXPLANATION</div><p id="aiText">Generate an optional local AI explanation of the evidence.</p><button id="explain">Explain with local AI</button><small id="aiLabel">Ollama · Llama 3.2 3B · No cloud inference</small></div>
-<details><summary>Inspect provenance & integrity</summary><pre id="raw"></pre></details></div></article></section>
-<section class="demo panel"><div><p class="section-label">SANDBOX DEMO CONTROLS</p><h2>One order. Two very different truths.</h2><p>Create an uncaptured order and verify the agent’s success claim. Then approve, capture and verify again.</p></div><div class="controls"><button id="create">1. Create $10 test order</button><a id="approve" class="button disabled" target="_blank" rel="noopener">2. Approve in sandbox ↗</a><button id="capture">3. Capture test payment</button></div><small>Controls reuse one order and stable request IDs. Verification never creates or captures payments. No goods are shipped.</small></section>
-<section class="history"><h2>Recent flight records</h2><div id="history"></div></section>
-<footer><span>Evidence first. Certainty earned.</span><span>Payment state at observation time · Not a guarantee against future disputes or reversals.</span></footer>
-</main></body></html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Commerce Flight Recorder — Proof after the agent says done</title>
+<link rel="stylesheet" href="/style.css"><script src="/app.js" defer></script>
+</head>
+<body>
+<header>
+  <a class="brand" href="/"><span class="mark">↗</span><span>Commerce Flight Recorder<small>Runtime truth for AI payments</small></span></a>
+  <span class="badge" id="environmentBadge">PAYPAL SANDBOX · NO REAL FUNDS</span>
+</header>
+<main>
+<section class="hero">
+  <div class="hero-copy">
+    <p class="eyebrow">THE AGENT SAID “PAID.” YOUR BUSINESS HAS TO DECIDE WHAT HAPPENS NEXT.</p>
+    <h1>Don’t ship on a sentence.<br><span>Ship on evidence.</span></h1>
+    <p class="intro">Commerce Flight Recorder independently checks what PayPal actually recorded, compares it with the agent’s claim, and turns the evidence into a clear merchant decision.</p>
+    <div class="audience"><b>Built for</b><span>merchants</span><span>commerce operators</span><span>teams deploying payment agents</span></div>
+  </div>
+  <aside class="story-card">
+    <p class="section-label">THE 10-SECOND STORY</p>
+    <div class="story-step"><span>1</span><div><b>Agent claim</b><p>“Payment completed. Fulfillment may proceed.”</p></div></div>
+    <div class="story-step"><span>2</span><div><b>Independent truth</b><p>Read the PayPal order, capture, and signed webhook evidence.</p></div></div>
+    <div class="story-step"><span>3</span><div><b>Merchant decision</b><p>Confirm, recommend a hold, or investigate before the business acts.</p></div></div>
+  </aside>
+</section>
+
+<div class="replay-banner" id="replayNotice" hidden><b>JUDGE-SAFE READ-ONLY REPLAY</b><span>Certified PayPal Sandbox evidence · no live API call · no payment-write capability</span></div>
+
+<section class="promise-strip">
+  <div><span class="promise-kicker">PROBLEM</span><b>An AI agent can sound certain before payment state is certain.</b></div>
+  <div><span class="promise-kicker">DIFFERENCE</span><b>CFR treats agent language as a claim, not as proof.</b></div>
+  <div><span class="promise-kicker">OUTCOME</span><b>Operators get a decision backed by provider evidence.</b></div>
+</section>
+
+<section class="workspace">
+<article class="panel claim">
+  <div class="section-label">01 / WHAT THE AGENT CLAIMED</div>
+  <h2>Would you trust this enough to ship?</h2>
+  <p class="panel-intro">The agent’s message is preserved exactly as evidence. It is never allowed to certify itself.</p>
+  <label for="claim">Agent message</label>
+  <textarea id="claim" rows="3">Payment completed successfully. Fulfillment may proceed.</textarea>
+  <label for="assertion">Business assertion to verify</label>
+  <select id="assertion"><option value="PAYMENT_COMPLETED">Payment captured in full</option></select>
+  <label for="order">PayPal sandbox order ID</label>
+  <input id="order" placeholder="Create a demo order below, or enter an ID" autocomplete="off">
+  <div class="row"><div><label for="amount">Expected amount</label><input id="amount" value="10.00" inputmode="decimal"></div><div><label for="currency">Currency</label><input id="currency" value="USD" maxlength="3"></div></div>
+  <button class="primary" id="verify">Check what actually happened <span>↗</span></button>
+  <p id="status" role="status">Ready to inspect authoritative sandbox evidence.</p>
+</article>
+
+<article class="panel evidence">
+  <div class="evidence-head"><div><div class="section-label">02 / THE FLIGHT RECORD</div><h2>Evidence before action</h2></div><button id="export" disabled>Export evidence ↓</button></div>
+  <div id="empty">
+    <div class="reticle">◎</div><h3>A confident agent message is still only a claim.</h3>
+    <p>Run verification to compare the claim with independent PayPal evidence and produce a merchant-safe decision.</p>
+  </div>
+  <div id="result" hidden>
+    <div id="verdictBox"><p class="eyebrow">MERCHANT DECISION</p><h2 id="verdict"></h2><p id="reason"></p><strong id="fulfillment"></strong></div>
+    <div class="decision-grid">
+      <div class="decision-card"><span>AGENT SAID</span><b id="agentClaimShort">Payment completed</b></div>
+      <div class="decision-card"><span>PAYPAL ORDER</span><b id="orderState"></b></div>
+      <div class="decision-card"><span>CAPTURE</span><b id="captureState"></b></div>
+      <div class="decision-card"><span>SIGNED WEBHOOK</span><b id="delivery"></b></div>
+    </div>
+    <div class="evidence-note"><span>Evidence coverage</span><b id="events"></b></div>
+    <p class="scope" id="scope"></p>
+    <div class="ai"><div class="section-label">03 / ASK THE EVIDENCE ANALYST</div><p id="aiText">Ask a plain-language question about this flight record. AI interprets what you are asking; the answer itself is assembled from sealed evidence, not invented by the model.</p><label for="aiQuestion">Operator question</label><div class="ask-row"><input id="aiQuestion" value="What payment evidence supports this verdict?" maxlength="300"><button id="explain">Ask analyst ↗</button></div><small id="aiLabel">Local AI routes the question · sealed evidence supplies the answer · verdict stays deterministic</small></div>
+    <details><summary>Inspect technical provenance & integrity</summary><pre id="raw"></pre></details>
+  </div>
+</article>
+</section>
+
+<section class="demo panel">
+  <div class="demo-copy"><p class="section-label">GUIDED JUDGE DEMO</p><h2>One claim. Two realities.</h2><p>First, prove why an agent’s success message is unsafe before capture. Then complete the sandbox payment and watch the same claim become evidence-backed.</p></div>
+  <div class="controls"><button id="create"><span>1</span>Start / resume $10 sandbox order</button><a id="approve" class="button disabled" target="_blank" rel="noopener"><span>2</span>Approve as sandbox buyer ↗</a><button id="capture" disabled><span>3</span>Capture sandbox payment</button></div>
+  <div class="demo-outcomes"><div><b>Before capture</b><span>DIVERGENCE → recommend fulfillment hold</span></div><div><b>After capture + verified evidence</b><span>CONFIRMED → payment evidence supports proceeding</span></div></div>
+</section>
+
+<section class="why">
+  <div class="why-heading"><p class="section-label">WHY THIS MATTERS</p><h2>The failure can be one sentence. The business consequence is real.</h2></div>
+  <div class="why-grid">
+    <article><span>01 / FAILURE MODE</span><h3>The agent says “paid” too early</h3><p>The demo proves the claim can sound complete while the PayPal order is still uncaptured. CFR keeps agent language as evidence, never as authority.</p></article>
+    <article><span>02 / BUSINESS CONSEQUENCE</span><h3>Automation may release value on bad evidence</h3><p>A merchant workflow can ship goods, provision access, or trigger downstream work. CFR turns payment uncertainty into an explicit hold recommendation before that business action.</p></article>
+    <article><span>03 / CFR INTERVENTION</span><h3>Independent PayPal truth decides the payment question</h3><p>CFR reconciles authoritative readback with verified webhook evidence, seals the record, and gives the operator a decision that the AI analyst cannot override.</p></article>
+  </div>
+</section>
+
+<section class="history"><div><p class="section-label">EVIDENCE TIMELINE</p><h2>Recent flight records</h2></div><p>Every verification becomes a sealed record so the story can be reviewed after the moment has passed.</p><div id="history"></div></section>
+<footer><span><b>Commerce Flight Recorder</b> · Evidence first. Certainty earned.</span><span>Sandbox demonstration · Point-in-time payment evidence · AI never overrides the deterministic verdict.</span></footer>
+</main>
+</body></html>

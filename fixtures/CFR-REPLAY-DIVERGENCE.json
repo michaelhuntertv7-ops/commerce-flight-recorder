@@ -1,0 +1,52 @@
+{
+  "id": "CFR-REPLAY-DIVERGENCE",
+  "version": "0.4.0",
+  "createdAt": "2026-10-21T07:48:13.767Z",
+  "environment": "SANDBOX_REPLAY",
+  "claim": {
+    "text": "Payment completed successfully. Fulfillment may proceed.",
+    "orderId": "2RB06836KU704812A",
+    "amount": "10.00",
+    "currency": "USD",
+    "expected": "PAYMENT_COMPLETED",
+    "claimedAt": "2026-10-21T07:48:13.361Z"
+  },
+  "evidence": {
+    "source": "PAYPAL_SANDBOX_API",
+    "startedAt": "2026-10-21T07:48:13.362Z",
+    "observedAt": "2026-10-21T07:48:13.766Z",
+    "order": {
+      "id": "2RB06836KU704812A",
+      "status": "PAYER_ACTION_REQUIRED",
+      "purchase_units": [
+        {
+          "reference_id": "CFR-DEMO",
+          "amount": {
+            "currency_code": "USD",
+            "value": "10.00",
+            "breakdown": {}
+          },
+          "payments": {}
+        }
+      ]
+    },
+    "capture": null,
+    "events": [],
+    "eventStatus": "NOT_QUERIED_NO_CAPTURE",
+    "webhookDelivery": "NOT_OBSERVED",
+    "endpoints": [
+      "GET /v2/checkout/orders/{id}"
+    ],
+    "verifiedWebhooks": []
+  },
+  "result": {
+    "verdict": "DIVERGENCE",
+    "code": "NOT_CAPTURED",
+    "reason": "PayPal has no capture for this order. Approval or creation is not payment completion.",
+    "fulfillment": "RECOMMEND FULFILLMENT HOLD",
+    "scope": "Payment captured for this order, amount and currency at observation time. Not a guarantee against future refunds, disputes or reversals."
+  },
+  "replayNotice": "Read-only public replay derived from a certified PayPal Sandbox observation. No live API call occurs when viewing this fixture.",
+  "previousHash": null,
+  "sha256": "da6369ebc12bdad7b1b277796d349ce67659c2cbf8bb788823b6693b1c3d60e9"
+}

@@ -3,8 +3,8 @@ export class PayPal {
   constructor({ clientId = process.env.PAYPAL_CLIENT_ID, secret = process.env.PAYPAL_CLIENT_SECRET, fetcher = fetch } = {}) {
     this.clientId = clientId; this.secret = secret; this.fetcher = fetcher;
   }
-  async request(path, { method = 'GET', body, requestId } = {}) {
-    if (!/^\/(v2\/checkout\/orders|v2\/payments\/captures|v1\/notifications\/webhooks-events)(\/|\?|$)/.test(path)) throw new Error('Endpoint denied');
+  async request(path, { method = 'GET', body, rawBody, requestId } = {}) {
+    if (!/^\/(v2\/checkout\/orders|v2\/payments\/captures|v1\/notifications\/(webhooks-events|verify-webhook-signature))(\/|\?|$)/.test(path)) throw new Error('Endpoint denied');
     if (!this.clientId || !this.secret) throw new Error('PAYPAL_NOT_CONFIGURED');
     if (!this.token || Date.now() >= this.expires) {
       const r = await this.fetcher(BASE + '/v1/oauth2/token', { method:'POST', headers:{Authorization:'Basic '+Buffer.from(this.clientId+':'+this.secret).toString('base64'), 'Content-Type':'application/x-www-form-urlencoded'}, body:'grant_type=client_credentials', signal:AbortSignal.timeout(15000), redirect:'error' });
@@ -13,7 +13,8 @@ export class PayPal {
       if (typeof t.access_token !== 'string') throw new Error('PAYPAL_AUTH_FAILED');
       this.token = t.access_token; this.expires = Date.now() + Math.min(Math.max(Number(t.expires_in || 60)-30, 1), 3600)*1000;
     }
-    const r = await this.fetcher(BASE + path, { method, headers:{ Authorization:'Bearer '+this.token, 'Content-Type':'application/json', Prefer:'return=representation', ...(requestId ? {'PayPal-Request-Id':requestId} : {}) }, body:body ? JSON.stringify(body):undefined, signal:AbortSignal.timeout(20000), redirect:'error' });
+    if (rawBody !== undefined && body !== undefined) throw new Error('AMBIGUOUS_BODY');
+    const r = await this.fetcher(BASE + path, { method, headers:{ Authorization:'Bearer '+this.token, 'Content-Type':'application/json', Prefer:'return=representation', ...(requestId ? {'PayPal-Request-Id':requestId} : {}) }, body:rawBody !== undefined ? rawBody : (body !== undefined ? JSON.stringify(body) : undefined), signal:AbortSignal.timeout(20000), redirect:'error' });
     if (!r.ok) throw new Error('PAYPAL_HTTP_'+r.status);
     return r.json();
   }
@@ -38,6 +39,30 @@ export class PayPal {
     } catch(e) {
       return {source:'PAYPAL_SANDBOX_API',startedAt,observedAt:new Date().toISOString(),error:/^PAYPAL_/.test(e.message)?e.message:'PROVIDER_UNAVAILABLE',webhookDelivery:'NOT_OBSERVED'};
     }
+  }
+  async verifyWebhook(headers, rawBody, webhookId = process.env.PAYPAL_WEBHOOK_ID) {
+    if (!webhookId || !/^[A-Z0-9-]{8,80}$/.test(webhookId)) throw new Error('PAYPAL_WEBHOOK_NOT_CONFIGURED');
+    if (typeof rawBody !== 'string' || !rawBody.length || Buffer.byteLength(rawBody) > 262144) throw new Error('INVALID_WEBHOOK_BODY');
+    let event;
+    try { event = JSON.parse(rawBody); } catch { throw new Error('INVALID_WEBHOOK_BODY'); }
+    if (!event || typeof event !== 'object' || !/^[A-Z0-9-]{8,80}$/.test(event.id || '') || typeof event.event_type !== 'string') throw new Error('INVALID_WEBHOOK_EVENT');
+    const get = name => {
+      const value = headers?.[name] ?? headers?.[name.toLowerCase()] ?? headers?.[name.toUpperCase()];
+      return Array.isArray(value) ? value[0] : value;
+    };
+    const fields = {
+      auth_algo:get('paypal-auth-algo'), cert_url:get('paypal-cert-url'), transmission_id:get('paypal-transmission-id'),
+      transmission_sig:get('paypal-transmission-sig'), transmission_time:get('paypal-transmission-time')
+    };
+    if (Object.values(fields).some(v=>typeof v!=='string' || !v.length || v.length>4096)) throw new Error('MISSING_WEBHOOK_SIGNATURE');
+    const prefix = '{'+Object.entries({...fields,webhook_id:webhookId}).map(([k,v])=>JSON.stringify(k)+':'+JSON.stringify(v)).join(',')+',"webhook_event":';
+    const response = await this.request('/v1/notifications/verify-webhook-signature',{method:'POST',rawBody:prefix+rawBody+'}'});
+    if (response?.verification_status !== 'SUCCESS') throw new Error('WEBHOOK_VERIFICATION_FAILED');
+    return {
+      id:event.id,event_type:event.event_type,create_time:event.create_time || null,verification:'SUCCESS',
+      resource_id:event.resource?.id || null,
+      order_id:event.resource?.supplementary_data?.related_ids?.order_id || null
+    };
   }
   async create(requestId, origin) {
     const order = await this.request('/v2/checkout/orders',{method:'POST',requestId,body:{intent:'CAPTURE',purchase_units:[{reference_id:'CFR-DEMO',description:'Commerce Flight Recorder sandbox demonstration',amount:{currency_code:'USD',value:'10.00'}}],payment_source:{paypal:{experience_context:{brand_name:'Commerce Flight Recorder Sandbox',shipping_preference:'NO_SHIPPING',user_action:'PAY_NOW',return_url:origin+'/approved',cancel_url:origin+'/cancelled'}}}}});
